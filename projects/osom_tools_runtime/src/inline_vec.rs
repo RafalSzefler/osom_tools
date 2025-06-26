@@ -4,12 +4,14 @@
     clippy::cast_possible_truncation
 )]
 
-use core::mem::{ManuallyDrop, MaybeUninit, forget};
+use core::mem::ManuallyDrop;
 use core::ops::Deref;
+use std::alloc::Layout;
+use std::ptr::dangling_mut;
 
 union InlineVecUnion<T, const N: usize> {
     stack_data: ManuallyDrop<[T; N]>,
-    heap_data: ManuallyDrop<Box<[T]>>,
+    heap_data: *mut T,
 }
 
 /// A structure similar to `vec` but holds `N` items inlined.
@@ -21,6 +23,8 @@ pub struct InlineVec<T, const N: usize> {
 }
 
 impl<T, const N: usize> InlineVec<T, N> {
+    const MAX_SIZE: usize = (i32::MAX - 1024) as usize;
+
     const _VALIDATE: () = const {
         assert!(
             N > 0,
@@ -29,16 +33,40 @@ impl<T, const N: usize> InlineVec<T, N> {
         // Note: 2147482623 is (i32::MAX - 1024). This is definitely way too much,
         // but we reserve some space, just in case.
         assert!(
-            N < 2147482623,
+            N < Self::MAX_SIZE,
             "N must be at most 2147482623. Which likely already is waaaay too much."
         );
     };
+
+    #[inline(always)]
+    const fn layout(size: usize) -> Layout {
+        let real_size = size * size_of::<T>();
+        let alignment = align_of::<T>();
+        unsafe { Layout::from_size_align_unchecked(real_size, alignment) }
+    }
+
+    #[inline(always)]
+    fn allocate_memory(size: usize) -> *mut T {
+        let new_memory = unsafe { std::alloc::alloc(Self::layout(size)) };
+        assert!(
+            !new_memory.is_null(),
+            "Couldn't allocate new memory for InlineVec resize."
+        );
+        let result = new_memory.cast::<T>();
+        assert!(result.is_aligned(), "Newly allocated memory is not aligned correctly.");
+        result
+    }
 
     /// Pushes a value to the end of the [`InlineVec`].
     ///
     /// Note that the [`InlineVec`] data will be moved to the heap
     /// only when length exceeds `N`. It won't come back from the
     /// heap though.
+    ///
+    /// # Panics
+    ///
+    /// Only during reallocation, when memory limits are exceeded, or
+    /// memory allocation is not possible for whatever reason.
     pub fn push(&mut self, value: T) {
         unsafe {
             if self.len < N as u32 {
@@ -49,35 +77,31 @@ impl<T, const N: usize> InlineVec<T, N> {
             }
 
             if self.capacity == N as u32 {
-                let new_capacity = self.capacity * 2;
-                let mut vec = Vec::<T>::with_capacity(new_capacity as usize);
-                vec.resize_with(new_capacity as usize, || MaybeUninit::<T>::uninit().assume_init());
+                let new_capacity = (self.capacity * 2) as usize;
+                assert!(new_capacity <= Self::MAX_SIZE, "New capacity exceeded 2147482623.");
+                let new_memory = Self::allocate_memory(new_capacity);
                 let stack_data = &self.data.stack_data;
-                vec.as_mut_ptr()
-                    .copy_from_nonoverlapping(stack_data.as_ptr(), self.len());
-                let mut boxed = ManuallyDrop::new(vec.into_boxed_slice());
-                boxed.as_mut_ptr().add(self.len()).write(value);
+                new_memory.copy_from_nonoverlapping(stack_data.as_ptr(), self.len());
+                new_memory.add(self.len()).write(value);
                 self.len += 1;
-                self.data = InlineVecUnion { heap_data: boxed };
-                self.capacity = new_capacity;
+                self.data = InlineVecUnion { heap_data: new_memory };
+                self.capacity = new_capacity as u32;
                 return;
             }
 
             if self.len == self.capacity {
-                let new_capacity = self.capacity * 2;
-                let mut vec = Vec::<T>::with_capacity(new_capacity as usize);
-                let current_box = ManuallyDrop::take(&mut self.data.heap_data);
-                vec.resize_with(new_capacity as usize, || MaybeUninit::<T>::uninit().assume_init());
-                vec.as_mut_ptr()
-                    .copy_from_nonoverlapping(current_box.as_ptr(), self.len());
-                forget(current_box);
-                let boxed = ManuallyDrop::new(vec.into_boxed_slice());
-                self.data = InlineVecUnion { heap_data: boxed };
-                self.capacity = new_capacity;
+                let new_capacity = (self.capacity * 2) as usize;
+                assert!(new_capacity <= Self::MAX_SIZE, "New capacity exceeded 2147482623.");
+                let new_memory = Self::allocate_memory(new_capacity);
+                let old_memory = self.data.heap_data;
+                new_memory.copy_from_nonoverlapping(old_memory, self.len());
+                let old_layout = Self::layout(self.capacity());
+                std::alloc::dealloc(old_memory.cast(), old_layout);
+                self.data.heap_data = new_memory;
+                self.capacity = new_capacity as u32;
             }
 
-            let boxed = &mut self.data.heap_data;
-            boxed.as_mut_ptr().add(self.len()).write(value);
+            self.data.heap_data.add(self.len()).write(value);
             self.len += 1;
         }
     }
@@ -85,10 +109,9 @@ impl<T, const N: usize> InlineVec<T, N> {
     /// Creates a new empty [`InlineVec`].
     #[inline]
     pub fn new() -> Self {
-        let uninit = unsafe { MaybeUninit::<[T; N]>::uninit().assume_init() };
         Self {
             data: InlineVecUnion {
-                stack_data: ManuallyDrop::new(uninit),
+                heap_data: dangling_mut(),
             },
             len: 0,
             capacity: N as u32,
@@ -115,7 +138,7 @@ impl<T, const N: usize> InlineVec<T, N> {
             let ptr = if self.capacity == N as u32 {
                 self.data.stack_data.as_ptr()
             } else {
-                self.data.heap_data.as_ptr()
+                self.data.heap_data
             };
 
             std::slice::from_raw_parts(ptr, self.len())
@@ -126,17 +149,24 @@ impl<T, const N: usize> InlineVec<T, N> {
 impl<T, const N: usize> Drop for InlineVec<T, N> {
     fn drop(&mut self) {
         unsafe {
-            let mut ptr = if self.capacity == N as u32 {
-                (&mut self.data.stack_data).as_mut_ptr()
-            } else {
-                (&mut self.data.heap_data).as_mut_ptr()
-            };
+            if core::mem::needs_drop::<T>() {
+                let mut ptr = if self.capacity == N as u32 {
+                    (&mut self.data.stack_data).as_mut_ptr()
+                } else {
+                    self.data.heap_data
+                };
 
-            let mut idx = 0;
-            while idx < self.len() {
-                drop(ptr.read());
-                ptr = ptr.add(1);
-                idx += 1;
+                let mut idx = 0;
+                while idx < self.len() {
+                    drop(ptr.read());
+                    ptr = ptr.add(1);
+                    idx += 1;
+                }
+            }
+
+            if self.capacity > N as u32 {
+                let layout = Self::layout(self.capacity());
+                std::alloc::dealloc(self.data.heap_data.cast(), layout);
             }
         }
     }
