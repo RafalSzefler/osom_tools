@@ -107,13 +107,13 @@ impl<T, const N: usize> InlineVec<T, N> {
 
     /// Pops last element from the [`InlineVec`],
     /// decreasing its size.
-    /// 
+    ///
     /// # Returns
-    /// 
+    ///
     /// * `Some(T)` if `self.len() > 0`
     /// * `None` otherwise
     pub fn pop(&mut self) -> Option<T> {
-        if self.len() == 0 {
+        if self.is_empty() {
             None
         } else {
             Some(unsafe { self.pop_unchecked() })
@@ -121,15 +121,15 @@ impl<T, const N: usize> InlineVec<T, N> {
     }
 
     /// Unsafe variant of [`pop`][`Self::pop`].
-    /// 
+    ///
     /// # Safety
-    /// 
+    ///
     /// Returns `T` if `self.len() > 0` and decrease the
     /// [`InlineVec`] size. The behaviour is undefined if
     /// `self.len() == 0`.
     #[inline]
     pub unsafe fn pop_unchecked(&mut self) -> T {
-        debug_assert!(self.len() > 0, "Tried pop_unchecked on length 0 InlineVec.");
+        debug_assert!(!self.is_empty(), "Tried pop_unchecked on length 0 InlineVec.");
         unsafe {
             let ptr = if self.capacity == N as u32 {
                 self.data.stack_data.as_ptr()
@@ -155,14 +155,21 @@ impl<T, const N: usize> InlineVec<T, N> {
 
     /// Returns the number of elements in the [`InlineVec`].
     #[inline(always)]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.len as usize
+    }
+
+    /// Returns `true` if the [`InlineVec`] is empty,
+    /// otherwise `false`.
+    #[inline(always)]
+    pub const fn is_empty(&self) -> bool {
+        self.len == 0
     }
 
     /// Returns the capacity of the [`InlineVec`]. Note that
     /// this is always at least `N`.
     #[inline(always)]
-    pub fn capacity(&self) -> usize {
+    pub const fn capacity(&self) -> usize {
         self.capacity as usize
     }
 

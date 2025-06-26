@@ -89,7 +89,6 @@ fn test_various_drops() {
     test_drop::<1000>();
 }
 
-
 #[rstest]
 #[case(&[1, 2])]
 #[case(&[-1, 12, 0])]
@@ -108,7 +107,6 @@ fn test_push_and_pop(#[case] data: &[i32]) {
     for _ in 0..(data.len() - 2) {
         assert!(inlined_vec.pop().is_some());
     }
-
 
     assert_eq!(inlined_vec.as_slice(), &[first, second]);
     assert_eq!(inlined_vec.pop().unwrap(), second);
