@@ -69,14 +69,13 @@ impl<T, const N: usize> InlineVec<T, N> {
     /// memory allocation is not possible for whatever reason.
     pub fn push(&mut self, value: T) {
         unsafe {
-            if self.len < N as u32 {
-                let data = &mut self.data.stack_data;
-                data.as_mut_ptr().add(self.len()).write(value);
-                self.len += 1;
-                return;
-            }
-
             if self.capacity == N as u32 {
+                if self.len < N as u32 {
+                    let data = &mut self.data.stack_data;
+                    data.as_mut_ptr().add(self.len()).write(value);
+                    self.len += 1;
+                    return;
+                }
                 let new_capacity = (self.capacity * 2) as usize;
                 assert!(new_capacity <= Self::MAX_SIZE, "New capacity exceeded 2147482623.");
                 let new_memory = Self::allocate_memory(new_capacity);
@@ -103,6 +102,42 @@ impl<T, const N: usize> InlineVec<T, N> {
 
             self.data.heap_data.add(self.len()).write(value);
             self.len += 1;
+        }
+    }
+
+    /// Pops last element from the [`InlineVec`],
+    /// decreasing its size.
+    /// 
+    /// # Returns
+    /// 
+    /// * `Some(T)` if `self.len() > 0`
+    /// * `None` otherwise
+    pub fn pop(&mut self) -> Option<T> {
+        if self.len() == 0 {
+            None
+        } else {
+            Some(unsafe { self.pop_unchecked() })
+        }
+    }
+
+    /// Unsafe variant of [`pop`][`Self::pop`].
+    /// 
+    /// # Safety
+    /// 
+    /// Returns `T` if `self.len() > 0` and decrease the
+    /// [`InlineVec`] size. The behaviour is undefined if
+    /// `self.len() == 0`.
+    #[inline]
+    pub unsafe fn pop_unchecked(&mut self) -> T {
+        debug_assert!(self.len() > 0, "Tried pop_unchecked on length 0 InlineVec.");
+        unsafe {
+            let ptr = if self.capacity == N as u32 {
+                self.data.stack_data.as_ptr()
+            } else {
+                self.data.heap_data
+            };
+            self.len -= 1;
+            ptr.add(self.len as usize).read()
         }
     }
 

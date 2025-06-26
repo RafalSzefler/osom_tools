@@ -88,3 +88,39 @@ fn test_various_drops() {
     test_drop::<250>();
     test_drop::<1000>();
 }
+
+
+#[rstest]
+#[case(&[1, 2])]
+#[case(&[-1, 12, 0])]
+#[case(&[-100, 2, -6, -7, 0, 12, 165, 111111])]
+fn test_push_and_pop(#[case] data: &[i32]) {
+    let first = data[0];
+    let second = data[1];
+    let mut inlined_vec = InlineVec::<_, 5>::new();
+    for value in data {
+        inlined_vec.push(*value);
+    }
+
+    assert_eq!(inlined_vec.as_slice(), data);
+    assert_eq!(inlined_vec.deref(), data);
+
+    for _ in 0..(data.len() - 2) {
+        assert!(inlined_vec.pop().is_some());
+    }
+
+
+    assert_eq!(inlined_vec.as_slice(), &[first, second]);
+    assert_eq!(inlined_vec.pop().unwrap(), second);
+    assert_eq!(inlined_vec.as_slice(), &[first]);
+    assert_eq!(inlined_vec.pop().unwrap(), first);
+    assert_eq!(inlined_vec.as_slice(), &[]);
+    assert!(inlined_vec.pop().is_none());
+
+    for _ in 0..3 {
+        assert!(inlined_vec.pop().is_none());
+    }
+
+    inlined_vec.push(12345);
+    assert_eq!(inlined_vec.as_slice(), &[12345]);
+}
