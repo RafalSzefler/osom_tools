@@ -14,7 +14,7 @@ keywords = ["osom", "tools"]
 crate-type = ["lib"]
 
 [dependencies]
-osom_tools_macros = { path = "../osom_tools_macros" }
+osom_tools_macros = { path = "../osom_tools_macros", version = "0.1" }
 
 [dev-dependencies]
 rstest = { workspace = true }
