@@ -15,9 +15,10 @@
     clippy::len_without_is_empty
 )]
 
-pub mod traits;
-
 #[doc(hidden)]
 pub mod hidden;
 
 mod macros;
+
+pub mod models;
+pub mod traits;

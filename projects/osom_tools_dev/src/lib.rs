@@ -15,5 +15,5 @@ pub mod traits {
 }
 
 pub mod macros {
-    pub use osom_tools_macros::{convert_to_fn, convert_to_fn_with_offset};
+    pub use osom_tools_macros::{assert_eq_hex, convert_to_fn, convert_to_fn_with_offset};
 }
