@@ -234,6 +234,7 @@ impl<T: Clone, const N: usize> Clone for InlineVec<T, N> {
 impl<T, const N: usize> std::fmt::Debug for InlineVec<T, N> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("InlineVec")
+            .field("N", &N)
             .field("len", &self.len())
             .field("capacity", &self.capacity())
             .finish()
