@@ -25,18 +25,19 @@ pub struct InlineVec<T, const N: usize> {
 impl<T, const N: usize> InlineVec<T, N> {
     const MAX_SIZE: usize = (i32::MAX - 1024) as usize;
 
-    const _VALIDATE: () = const {
+    const fn validate() {
         assert!(
             N > 0,
-            "N must be greater than 0. InlineVec with N == 0 is just Vec. Use Vec instead."
+            "N in InlineVec must be greater than 0. InlineVec with N == 0 is just Vec. Use Vec instead."
         );
+
         // Note: 2147482623 is (i32::MAX - 1024). This is definitely way too much,
         // but we reserve some space, just in case.
         assert!(
             N < Self::MAX_SIZE,
-            "N must be at most 2147482623. Which likely already is waaaay too much."
+            "N in InlineVec must be at most 2147482623. Which likely already is waaaay too much."
         );
-    };
+    }
 
     #[inline(always)]
     const fn layout(size: usize) -> Layout {
@@ -143,7 +144,9 @@ impl<T, const N: usize> InlineVec<T, N> {
 
     /// Creates a new empty [`InlineVec`].
     #[inline]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
+        const { Self::validate() };
+
         Self {
             data: InlineVecUnion {
                 heap_data: dangling_mut(),
