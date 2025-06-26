@@ -1,4 +1,9 @@
-//! A collection of test tools for osom projects.
+//! A collection of macros for osom projects.
+//!
+//! # Warning
+//!
+//! This project is not meant to be used directly.
+//! Some macros will be re-exported by other osom projects.
 #![deny(warnings)]
 #![warn(clippy::all, clippy::pedantic)]
 #![allow(
@@ -10,10 +15,9 @@
     clippy::len_without_is_empty
 )]
 
-pub mod traits {
-    pub use osom_tools_macros::traits::Pointerable;
-}
+pub mod traits;
 
-pub mod macros {
-    pub use osom_tools_macros::{convert_to_fn, convert_to_fn_with_offset};
-}
+#[doc(hidden)]
+pub mod hidden;
+
+mod macros;
