@@ -1,0 +1,17 @@
+[package]
+name = "osom_tools_dev"
+version = "0.1.0"
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+categories.workspace = true
+description = "Osom tools for osom projects, to be used for testing."
+keywords = ["osom", "tools"]
+
+[lib]
+crate-type = ["lib"]
+
+[dev-dependencies]
+rstest = { workspace = true }
