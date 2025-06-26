@@ -30,7 +30,7 @@ macro_rules! convert_to_fn_with_offset {
                 type _FnSignature = $crate::_fn_signature!($abi, $($tokens)*);
                 let _ptr = $crate::traits::Pointerable::as_ptr(&($pointerable))
                     .add(($offset) as usize);
-                std::mem::transmute::<*mut u8, _FnSignature>(_ptr)
+                return core::mem::transmute::<*mut u8, _FnSignature>(_ptr);
             }
         })
     };
